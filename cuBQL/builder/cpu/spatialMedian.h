@@ -136,7 +136,7 @@ namespace cuBQL {
         if (primIDs.empty()) {
           // if we had no valid input prims whatsoever
           bvh.nodes = new typename BinaryBVH<T,D>::Node[1];
-          bvh.nodes[0].bounds = box3f();
+          bvh.nodes[0].bounds = box_t();
           bvh.nodes[0].admin.offset = 0;
           bvh.nodes[0].admin.count = 1;
           bvh.primIDs = new uint32_t[numPrims];
