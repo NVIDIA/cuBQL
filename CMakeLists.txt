@@ -166,6 +166,11 @@ add_subdirectory(cuBQL)
 
 if (NOT CUBQL_IS_SUBPROJECT)
   add_subdirectory(samples)
+  option(CUBQL_BUILD_TESTS "Build cuBQL correctness tests" OFF)
+  if (CUBQL_BUILD_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+  endif()
 endif()
 
 #add_subdirectory(testing)
