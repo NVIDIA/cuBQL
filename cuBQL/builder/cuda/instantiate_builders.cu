@@ -36,6 +36,20 @@
                            cudaStream_t       s,                        \
                            GpuMemoryResource &mem_resource);            \
     template                                                            \
+    void radixBuilder<uint32_t,T,D>(BinaryBVH<T,D>    &bvh,               \
+                                    const box_t<T,D>  *boxes,            \
+                                    uint32_t           numBoxes,         \
+                                    BuildConfig        buildConfig,      \
+                                    cudaStream_t       s,                \
+                                    GpuMemoryResource &mem_resource);    \
+    template                                                            \
+    void radixBuilder<uint64_t,T,D>(BinaryBVH<T,D>    &bvh,               \
+                                    const box_t<T,D>  *boxes,            \
+                                    uint32_t           numBoxes,         \
+                                    BuildConfig        buildConfig,      \
+                                    cudaStream_t       s,                \
+                                    GpuMemoryResource &mem_resource);    \
+    template                                                            \
     void rebinRadixBuilder<T,D>(BinaryBVH<T,D>    &bvh,                 \
                                 const box_t<T,D>  *boxes,               \
                                 uint32_t           numBoxes,            \
