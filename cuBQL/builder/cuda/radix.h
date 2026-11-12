@@ -4,6 +4,7 @@
 #pragma once
 
 #include "cuBQL/builder/cuda/sm_builder.h"
+#include <type_traits>
 
 namespace cuBQL {
   namespace radixBuilder_impl {
@@ -11,8 +12,6 @@ namespace cuBQL {
     using gpuBuilder_impl::_ALLOC;
     using gpuBuilder_impl::_FREE;
     
-    template<typename T, int D> struct Quantizer;
-
     template<int D> struct numMortonBits;
 #if 0
     template<> struct numMortonBits<2> { enum { value = 31 }; };
@@ -24,9 +23,27 @@ namespace cuBQL {
     template<> struct numMortonBits<3> { enum { value = 10 }; };
     template<> struct numMortonBits<4> { enum { value =  7 }; };
 #endif
+
+    template<typename MortonKey, int D>
+    struct MortonKeyTraits {
+      static_assert(std::is_same<MortonKey,uint32_t>::value
+                    || std::is_same<MortonKey,uint64_t>::value,
+                    "Morton keys must be uint32_t or uint64_t");
+      static_assert(D >= 2 && D <= 4,
+                    "Morton keys require two, three, or four dimensions");
+      enum {
+        numBits = (8*sizeof(MortonKey)-1)/D,
+        meaningfulBits = D*numBits,
+        sortEndBit = sizeof(MortonKey) == sizeof(uint32_t)
+        ? meaningfulBits : 64
+      };
+    };
+
+    template<typename T, int D, int NumBits=numMortonBits<D>::value>
+    struct Quantizer;
     
-    template<int D>
-    struct Quantizer<float,D> {
+    template<int D, int NumBits>
+    struct Quantizer<float,D,NumBits> {
       using vec_t = cuBQL::vec_t<float,D>;
       using box_t = cuBQL::box_t<float,D>;
       
@@ -35,7 +52,7 @@ namespace cuBQL {
         quantizeBias
           = centBounds.lower;
         quantizeScale
-          = vec_t(1u<<numMortonBits<D>::value)
+          = vec_t(1u<<NumBits)
           * rcp(max(vec_t(reduce_max(centBounds.size())),vec_t(1e-20f)));
       }
         
@@ -44,7 +61,7 @@ namespace cuBQL {
         using vec_ui = cuBQL::vec_t<uint32_t,D>;
 
         vec_ui cell = vec_ui((P-quantizeBias)*quantizeScale);
-        cell = min(cell,vec_ui(uint32_t(((1u<<numMortonBits<D>::value)-1))));
+        cell = min(cell,vec_ui(uint32_t(((1u<<NumBits)-1))));
         return cell;
       }
         
@@ -56,8 +73,8 @@ namespace cuBQL {
       vec_t quantizeScale;
     };
 
-    template<int D>
-    struct Quantizer<double,D> {
+    template<int D, int NumBits>
+    struct Quantizer<double,D,NumBits> {
       using vec_t = cuBQL::vec_t<double,D>;
       using box_t = cuBQL::box_t<double,D>;
       
@@ -66,7 +83,7 @@ namespace cuBQL {
         using vec_ui = cuBQL::vec_t<uint32_t,D>;
 
         vec_ui cell = vec_ui((P-quantizeBias)*quantizeScale);
-        cell = min(cell,vec_ui(uint32_t(((1u<<numMortonBits<D>::value)-1))));
+        cell = min(cell,vec_ui(uint32_t(((1u<<NumBits)-1))));
         return cell;
       }
         
@@ -75,7 +92,7 @@ namespace cuBQL {
         quantizeBias
           = centBounds.lower;
         quantizeScale
-          = vec_t(1u<<numMortonBits<D>::value)
+          = vec_t(1u<<NumBits)
           * rcp(max(vec_t(reduce_max(centBounds.size())),vec_t(1e-20f)));
       }
         
@@ -87,8 +104,8 @@ namespace cuBQL {
       vec_t quantizeScale;
     };
 
-    template<int D>
-    struct Quantizer<int,D> {
+    template<int D, int NumBits>
+    struct Quantizer<int,D,NumBits> {
       using vec_t = cuBQL::vec_t<int,D>;
       using box_t = cuBQL::box_t<int,D>;
       
@@ -104,7 +121,7 @@ namespace cuBQL {
         cuBQL::vec_t<uint32_t,D> cell = cuBQL::vec_t<uint32_t,D>(P-quantizeBias);
         // move all relevant bits to top
         cell = cell << shlBits;
-        return cell >> (32-numMortonBits<D>::value);
+        return cell >> (32-NumBits);
       }
         
       /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
@@ -115,8 +132,8 @@ namespace cuBQL {
       int   shlBits;
     };
     
-    template<int D>
-    struct Quantizer<int64_t,D> {
+    template<int D, int NumBits>
+    struct Quantizer<int64_t,D,NumBits> {
       using vec_t = cuBQL::vec_t<int64_t,D>;
       using box_t = cuBQL::box_t<int64_t,D>;
       
@@ -132,7 +149,7 @@ namespace cuBQL {
         cuBQL::vec_t<uint64_t,D> cell = cuBQL::vec_t<uint64_t,D>(P-quantizeBias);
         // move all relevant bits to top
         cell = cell << shlBits;
-        return cuBQL::vec_t<uint32_t,D>(cell >> (64-numMortonBits<D>::value));
+        return cuBQL::vec_t<uint32_t,D>(cell >> (64-NumBits));
       }
         
       /*! coefficients of `scale*(x-bias)` in the 21-bit fixed-point
@@ -147,7 +164,8 @@ namespace cuBQL {
 
     
     /*! maintains high-level summary of the build process */
-    template<typename T, int D>
+    template<typename T, int D, typename MortonKey=uint64_t,
+             int NumBits=numMortonBits<D>::value>
     struct CUBQL_ALIGN(16) BuildState {
       using vec_t = cuBQL::vec_t<T,D>;//float,3>;
       using box_t = cuBQL::box_t<T,D>;//float,3>;
@@ -166,12 +184,13 @@ namespace cuBQL {
         morton codes */
       atomic_box_t a_centBounds;
       box_t        centBounds;
-      Quantizer<T,D> quantizer;
+      Quantizer<T,D,NumBits> quantizer;
     };
 
-    template<typename T, int D>
+    template<typename T, int D, typename MortonKey=uint64_t,
+             int NumBits=numMortonBits<D>::value>
     __global__
-    void clearBuildState(BuildState<T,D> *buildState,
+    void clearBuildState(BuildState<T,D,MortonKey,NumBits> *buildState,
                          int          numPrims)
     {
       if (threadIdx.x != 0) return;
@@ -183,14 +202,15 @@ namespace cuBQL {
       buildState->numNodesAlloced = 0;
     }
     
-    template<typename T, int D>
+    template<typename T, int D, typename MortonKey=uint64_t,
+             int NumBits=numMortonBits<D>::value>
     __global__
-    void fillBuildState(BuildState<T,D>  *buildState,
-                        const typename BuildState<T,D>::box_t *prims,
+    void fillBuildState(BuildState<T,D,MortonKey,NumBits>  *buildState,
+                        const typename BuildState<T,D,MortonKey,NumBits>::box_t *prims,
                         int          numPrims)
     {
-      using atomic_box_t = typename BuildState<T,D>::atomic_box_t;
-      using box_t        = typename BuildState<T,D>::box_t;
+      using atomic_box_t = typename BuildState<T,D,MortonKey,NumBits>::atomic_box_t;
+      using box_t        = typename BuildState<T,D,MortonKey,NumBits>::box_t;
       
       __shared__ atomic_box_t l_centBounds;
       if (threadIdx.x == 0)
@@ -213,11 +233,12 @@ namespace cuBQL {
         atomic_grow(buildState->a_centBounds,l_centBounds);
     }
 
-    template<typename T, int D>
+    template<typename T, int D, typename MortonKey=uint64_t,
+             int NumBits=numMortonBits<D>::value>
     __global__
-    void finishBuildState(BuildState<T,D>  *buildState)
+    void finishBuildState(BuildState<T,D,MortonKey,NumBits>  *buildState)
     {
-      using ctx_t = BuildState<float,D>;
+      using ctx_t = BuildState<T,D,MortonKey,NumBits>;
       using atomic_box_t = typename ctx_t::atomic_box_t;
       using box_t        = typename ctx_t::box_t;
       
@@ -372,24 +393,26 @@ namespace cuBQL {
         (bitInterleave11(yw) << 1);
     }
     
-    template<typename T, int D>
+    template<typename T, int D, typename MortonKey=uint64_t,
+             int NumBits=numMortonBits<D>::value>
     inline __device__
-    uint64_t computeMortonCode(typename BuildState<T,D>::vec_t P,
-                               const Quantizer<T,D> quantizer)
+    MortonKey computeMortonCode(typename BuildState<T,D,MortonKey,NumBits>::vec_t P,
+                               const Quantizer<T,D,NumBits> quantizer)
     {
-      return interleaveBits64(quantizer.quantize(P));
+      return MortonKey(interleaveBits64(quantizer.quantize(P)));
     }
     
-    template<typename T, int D>
+    template<typename T, int D, typename MortonKey=uint64_t,
+             int NumBits=numMortonBits<D>::value>
     __global__
-    void computeUnsortedKeysAndPrimIDs(uint64_t    *mortonCodes,
+    void computeUnsortedKeysAndPrimIDs(MortonKey    *mortonCodes,
                                        uint32_t    *primIDs,
-                                       BuildState<T,D>  *buildState,
-                                       const typename BuildState<T,D>::box_t *prims,
+                                       BuildState<T,D,MortonKey,NumBits>  *buildState,
+                                       const typename BuildState<T,D,MortonKey,NumBits>::box_t *prims,
                                        int numPrims)
     {
-      using atomic_box_t = typename BuildState<T,D>::atomic_box_t;
-      using box_t        = typename BuildState<T,D>::box_t;
+      using atomic_box_t = typename BuildState<T,D,MortonKey,NumBits>::atomic_box_t;
+      using box_t        = typename BuildState<T,D,MortonKey,NumBits>::box_t;
       
       int tid = threadIdx.x + blockIdx.x*blockDim.x;
       if (tid >= numPrims) return;
@@ -404,7 +427,7 @@ namespace cuBQL {
 
       primIDs[tid] = primID;
       mortonCodes[tid]
-        = computeMortonCode(prim.center(),buildState->quantizer);
+        = computeMortonCode<T,D,MortonKey,NumBits>(prim.center(),buildState->quantizer);
     }
 
     struct TempNode {
@@ -430,9 +453,10 @@ namespace cuBQL {
     };
 
 
+    template<typename MortonKey>
     inline __device__
     bool findSplit(int &split,
-                   const uint64_t *__restrict__ keys,
+                   const MortonKey *__restrict__ keys,
                    int begin, int end,
                    int maxAllowedLeafSize)
     {
@@ -468,9 +492,10 @@ namespace cuBQL {
       return true;
     }
 
-    template<typename T, int D>
+    template<typename T, int D, typename MortonKey=uint64_t,
+             int NumBits=numMortonBits<D>::value>
     __global__
-    void initNodes(BuildState<T,D> *buildState,
+    void initNodes(BuildState<T,D,MortonKey,NumBits> *buildState,
                    TempNode   *nodes,
                    int numValidPrims)
     {
@@ -485,17 +510,18 @@ namespace cuBQL {
       nodes[1] = n1;
     }
 
-    template<typename T, int D>
+    template<typename T, int D, typename MortonKey=uint64_t,
+             int NumBits=numMortonBits<D>::value>
     __global__
-    void createNodes(BuildState<T,D> *buildState,
+    void createNodes(BuildState<T,D,MortonKey,NumBits> *buildState,
                      int leafThreshold,
                      int maxAllowedLeafSize,
                      TempNode *nodes,
                      int begin, int end,
-                     const uint64_t *keys)
+                     const MortonKey *keys)
     {
-      using atomic_box_t = typename BuildState<T,D>::atomic_box_t;
-      using box_t        = typename BuildState<T,D>::box_t;
+      using atomic_box_t = typename BuildState<T,D,MortonKey,NumBits>::atomic_box_t;
+      using box_t        = typename BuildState<T,D,MortonKey,NumBits>::box_t;
       
       __shared__ int l_allocOffset;
       
@@ -575,14 +601,25 @@ namespace cuBQL {
       finalNodes[tid].admin.offsetAndCountBits = node.admin.offsetAndCountBits;
     }
     
-    template<typename T, int D>
+    template<typename T, int D, typename MortonKey=uint64_t,
+             int NumBits=numMortonBits<D>::value,
+             int SortEndBit=8*sizeof(MortonKey)>
     void build(BinaryBVH<T,D>        &bvh,
-               const typename BuildState<T,D>::box_t       *boxes,
+               const box_t<T,D>       *boxes,
                uint32_t           numPrims,
                BuildConfig        buildConfig,
                cudaStream_t       s,
                GpuMemoryResource &memResource)
     {
+      static_assert(std::is_same<MortonKey,uint32_t>::value
+                    || std::is_same<MortonKey,uint64_t>::value,
+                    "Morton keys must be uint32_t or uint64_t");
+      static_assert(NumBits > 0 && NumBits <= 31
+                    && D*NumBits <= 8*sizeof(MortonKey),
+                    "Morton key precision must fit in the key type");
+      static_assert(SortEndBit >= D*NumBits
+                    && SortEndBit <= 8*sizeof(MortonKey),
+                    "Morton sort range must include every populated key bit");
       const int makeLeafThreshold
         = (buildConfig.makeLeafThreshold > 0)
         ? std::min(buildConfig.makeLeafThreshold,buildConfig.maxAllowedLeafSize)
@@ -595,7 +632,7 @@ namespace cuBQL {
       /* step 1.1, init build state; in particular, clear the shared
          centbounds we need to atomically grow centroid bounds in next
          step */
-      BuildState<T,D> *d_buildState = 0;
+      BuildState<T,D,MortonKey,NumBits> *d_buildState = 0;
       _ALLOC(d_buildState,1,s,memResource);
       clearBuildState<<<32,1,0,s>>>
         (d_buildState,numPrims);
@@ -609,7 +646,7 @@ namespace cuBQL {
       finishBuildState<<<32,1,0,s>>>
         (d_buildState);
 
-      static BuildState<T,D> *h_buildState = 0;
+      static BuildState<T,D,MortonKey,NumBits> *h_buildState = 0;
       if (!h_buildState)
         CUBQL_CUDA_CALL(MallocHost((void**)&h_buildState,
                                    sizeof(*h_buildState)));
@@ -634,7 +671,7 @@ namespace cuBQL {
       /* 2.1, allocate mem for _unsorted_ prim IDs and morton codes,
          then compute initial primID array (will already exclude prims
          that are invalid) and (unsorted) morton code array */
-      uint64_t *d_primKeys_unsorted;
+      MortonKey *d_primKeys_unsorted;
       uint32_t *d_primIDs_unsorted;
       _ALLOC(d_primKeys_unsorted,numPrims,s,memResource);
       _ALLOC(d_primIDs_unsorted,numPrims,s,memResource);
@@ -646,7 +683,7 @@ namespace cuBQL {
       /* 2.2: ask cub radix sorter for how much temp mem it needs, and
          allocate */
       size_t cub_tempMemSize;
-      uint64_t *d_primKeys_sorted = 0;
+      MortonKey *d_primKeys_sorted = 0;
       uint32_t *d_primIDs_inMortonOrder = 0;
       // with tempMem ptr null this won't do anything but return reqd
       // temp size*/
@@ -657,7 +694,7 @@ namespace cuBQL {
          /*keys out:*/  d_primKeys_sorted,
          /*values in:*/ d_primIDs_unsorted,
          /*values out:*/d_primIDs_inMortonOrder,
-         numValidPrims,0,64,s);
+         numValidPrims,0,SortEndBit,s);
       
       // 2.3: allocate temp mem and output arrays
       void     *d_tempMem = 0;
@@ -673,7 +710,7 @@ namespace cuBQL {
          /*keys out:*/  d_primKeys_sorted,
          /*values in:*/ d_primIDs_unsorted,
          /*values out:*/d_primIDs_inMortonOrder,
-         numValidPrims,0,64,s);
+         numValidPrims,0,SortEndBit,s);
       rc = rc;
       // 2.5 - cleanup after sort: no longer need tempmem, or unsorted inputs
       _FREE(d_primKeys_unsorted,s,memResource);
@@ -756,6 +793,21 @@ namespace cuBQL {
                       cuBQL::GpuMemoryResource &memResource)
     {
       radixBuilder_impl::build(bvh,boxes,numPrims,buildConfig,s,memResource);
+    }
+
+    template<typename MortonKey, typename T, int D>
+    typename std::enable_if<std::is_same<MortonKey,uint32_t>::value
+                           || std::is_same<MortonKey,uint64_t>::value,void>::type
+    radixBuilder(cuBQL::BinaryBVH<T,D>    &bvh,
+                 const cuBQL::box_t<T,D>  *boxes,
+                 uint32_t                  numPrims,
+                 cuBQL::BuildConfig        buildConfig,
+                 cudaStream_t              s,
+                 cuBQL::GpuMemoryResource &memResource)
+    {
+      using traits = radixBuilder_impl::MortonKeyTraits<MortonKey,D>;
+      radixBuilder_impl::build<T,D,MortonKey,traits::numBits,traits::sortEndBit>
+        (bvh,boxes,numPrims,buildConfig,s,memResource);
     }
   }
 }

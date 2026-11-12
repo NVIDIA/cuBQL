@@ -10,6 +10,7 @@
 #endif
 # include "cuBQL/math/box.h"
 # include <mutex>
+# include <type_traits>
 
 namespace cuBQL {
   // ------------------------------------------------------------------
@@ -179,6 +180,18 @@ namespace cuBQL {
                       BuildConfig        buildConfig,
                       cudaStream_t       s=0,
                       GpuMemoryResource &memResource=defaultGpuMemResource());
+
+    /*! Select uint32_t for compact Morton keys, or uint64_t for higher
+      precision. Requires finite, nonempty primitive bounds. */
+    template<typename MortonKey, typename T, int D>
+    typename std::enable_if<std::is_same<MortonKey,uint32_t>::value
+                           || std::is_same<MortonKey,uint64_t>::value,void>::type
+    radixBuilder(BinaryBVH<T,D>    &bvh,
+                 const box_t<T,D>  *boxes,
+                 uint32_t           numPrims,
+                 BuildConfig        buildConfig,
+                 cudaStream_t       s=0,
+                 GpuMemoryResource &memResource=defaultGpuMemResource());
   
     // ------------------------------------------------------------------
     /*! fast radix/morton builder with automatic rebinning where

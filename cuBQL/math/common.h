@@ -106,13 +106,10 @@ using cudaMemPool_t = hipMemPool_t;
 
 # define CUBQL_INTERFACE /* nothing - currently not building any special 'cubql.dll' */
 
-#ifndef __PRETTY_FUNCTION__
-# if defined(__func__)
-#  define __PRETTY_FUNCTION__ __func__
-// #  define __PRETTY_FUNCTION__ __FILE__##"::"##__LINE__##": "##__FUNCTION__
-# else
-#  define __PRETTY_FUNCTION__ __FUNCTION__
-# endif
+// GCC and Clang provide __PRETTY_FUNCTION__ as a predefined identifier, not
+// a macro, so only MSVC needs a fallback.
+#if defined(_MSC_VER) && !defined(__clang__) && !defined(__PRETTY_FUNCTION__)
+# define __PRETTY_FUNCTION__ __FUNCSIG__
 #endif
 
 
