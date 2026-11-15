@@ -47,12 +47,15 @@ namespace cuBQL {
                        Candidate  newCandidate,
                        Result    &result)
     {
+      // result.sqrDistMax is the max query radius until the list is
+      // full, and the distance to the most distant candidate after
+      // that; either way, anything at or beyond it is not a candidate
+      if (newCandidate.sqrDist >= result.sqrDistMax)
+        return;
       int insertPos;
       if (result.numFound < maxCandidates) {
         insertPos = result.numFound++;
       } else {
-        if (newCandidate.sqrDist >= result.sqrDistMax)
-          return;
         insertPos = maxCandidates-1;
       }
       while (insertPos > 0 && candidates[insertPos-1].sqrDist > newCandidate.sqrDist) {
