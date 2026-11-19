@@ -510,13 +510,13 @@ namespace cuBQL {
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
                                      (uint64_t*)primStates,
                                      (uint64_t*)sortedPrimStates,
-                                     numPrims,32,64,s);
+                                     numPrims,CUBQL_UPPER_HALF_SORT_BEGIN_BIT,64,s);
       _ALLOC(d_temp_storage,temp_storage_bytes,s,memResource);
       rc = 
       cub::DeviceRadixSort::SortKeys((void*&)d_temp_storage, temp_storage_bytes,
                                      (uint64_t*)primStates,
                                      (uint64_t*)sortedPrimStates,
-                                     numPrims,32,64,s);
+                                     numPrims,CUBQL_UPPER_HALF_SORT_BEGIN_BIT,64,s);
       rc = rc;
       CUBQL_CUDA_CALL(StreamSynchronize(s));
       _FREE(d_temp_storage,s,memResource);

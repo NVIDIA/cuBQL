@@ -20,6 +20,19 @@ namespace cub {
 }
 #endif
 
+/* begin bit for radix sorts keyed on the upper 32 bits of a 64-bit
+   word. rocPRIM's radix sort mis-orders 64-bit keys when end_bit is
+   64 and begin_bit is not 0 (1025 to 2^20 keys), so on HIP sort all
+   64 bits: that keeps the order of the upper halves and only orders
+   equal upper halves by their lower half, which no caller relies on.
+   Bits [32,63) would not do: invalid prims carry node ID
+   (uint32_t)-1, whose top bit must take part in the sort */
+#ifdef __HIPCC__
+# define CUBQL_UPPER_HALF_SORT_BEGIN_BIT 0
+#else
+# define CUBQL_UPPER_HALF_SORT_BEGIN_BIT 32
+#endif
+
 namespace cuBQL {
   namespace gpuBuilder_impl {
 

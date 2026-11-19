@@ -1069,7 +1069,7 @@ namespace cuBQL {
         (nullptr,cub_tempMemSize,
          /*key+values in:*/   d_keysValues_in,
          /*key+values out:*/  d_keysValues_out,
-         N,32,64,s);
+         N,CUBQL_UPPER_HALF_SORT_BEGIN_BIT,64,s);
       
       // allocate temp mem and output arrays
       void     *d_tempMem = 0;
@@ -1080,7 +1080,7 @@ namespace cuBQL {
         (d_tempMem,cub_tempMemSize,
          /*key+values in:*/   d_keysValues_in,
          /*key+values out:*/  d_keysValues_out,
-         N,32,64,s);
+         N,CUBQL_UPPER_HALF_SORT_BEGIN_BIT,64,s);
       
       _FREE(d_tempMem,s,memResource);
     }                      

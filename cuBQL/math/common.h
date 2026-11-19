@@ -37,6 +37,7 @@ using cudaError_t  = hipError_t;
 using cudaStream_t = hipStream_t;
 using cudaEvent_t  = hipEvent_t;
 using cudaMemPool_t = hipMemPool_t;
+using cudaDeviceProp = hipDeviceProp_t;
 #  define cudaSuccess                      hipSuccess
 #  define cudaMemcpyDeviceToHost           hipMemcpyDeviceToHost
 #  define cudaMemcpyHostToDevice           hipMemcpyHostToDevice
@@ -50,6 +51,9 @@ using cudaMemPool_t = hipMemPool_t;
 #  define cudaGetDevice                    hipGetDevice
 #  define cudaSetDevice                    hipSetDevice
 #  define cudaGetDeviceCount               hipGetDeviceCount
+#  define cudaGetDeviceProperties          hipGetDeviceProperties
+#  define cudaRuntimeGetVersion            hipRuntimeGetVersion
+#  define cudaDriverGetVersion             hipDriverGetVersion
 #  define cudaMalloc                       hipMalloc
 #  define cudaMallocHost                   hipHostMalloc
 #  define cudaFree                         hipFree
